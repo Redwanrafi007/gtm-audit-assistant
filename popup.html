@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; width: 320px; padding: 15px; }
+    h3 { margin-top: 0; color: #333; }
+    button { width: 100%; margin: 10px 0; padding: 10px; cursor: pointer; background: #4285f4; color: white; border: none; border-radius: 4px; }
+    button:hover { background: #3367D6; }
+    select { width: 100%; margin: 5px 0; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+    pre { background: #f5f5f5; padding: 10px; overflow-x: auto; font-size: 11px; max-height: 200px; }
+    label { font-size: 12px; color: #666; font-weight: bold; display: block; margin-top: 8px;}
+  </style>
+</head>
+<body>
+  <h3>GTM Audit Assistant 🚀</h3>
+
+  <button id="login">🔑 Connect Google</button>
+
+  <label>Select Account:</label>
+  <select id="accounts"><option>Loading...</option></select>
+
+  <label>Select Container:</label>
+  <select id="containers"><option>Waiting...</option></select>
+
+  <label>Select Workspace:</label>
+  <select id="workspaces"><option>Waiting...</option></select>
+
+  <button id="audit">⚡ Run Full Audit</button>
+
+  <pre id="output">Results will appear here...</pre>
+
+  <script src="popup.js"></script>
+</body>
+</html>
