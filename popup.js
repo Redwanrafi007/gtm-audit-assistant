@@ -1,58 +1,120 @@
 const API = "https://gtm-audit-backend-8q9x.onrender.com";
 
-// Helper to fetch data
+// ==========================================
+// 🔒 SECURE FETCH HELPER
+// Automatically attaches the User Token to every request
+// ==========================================
 async function fetchJSON(url) {
-  const res = await fetch(url, { cache: "no-store" });
+  // 1. Retrieve token from local storage
+  const stored = await chrome.storage.local.get("access_token");
+  const token = stored.access_token;
+
+  if (!token) {
+    throw new Error("No access token found. Please login.");
+  }
+
+  // 2. Send request with Authorization Header
+  const res = await fetch(url, {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      "Authorization": `Bearer ${token}`, // <--- The Security Key 🛡️
+      "Content-Type": "application/json"
+    }
+  });
+
+  // 3. Handle Expired Sessions (401)
+  if (res.status === 401) {
+    await chrome.storage.local.remove("access_token");
+    throw new Error("Session expired. Please login again.");
+  }
+
   return res.json();
 }
 
-// 1. Login Button
+// ==========================================
+// 🔑 LOGIN LOGIC
+// Opens a popup, waits for the server to send the token back
+// ==========================================
 document.getElementById("login").addEventListener('click', () => {
-  chrome.tabs.create({ url: `${API}/auth` });
+  // Open the auth window
+  const authWindow = window.open(`${API}/auth`, "AuthWindow", "width=500,height=600");
+
+  // Listen for the token from the backend
+  window.addEventListener("message", async (event) => {
+    // Ensure message is from our trusted server (optional but recommended)
+    // if (event.origin !== "https://gtm-audit-backend-8q9x.onrender.com") return;
+
+    if (event.data.token) {
+      console.log("✅ Token received via secure channel.");
+      
+      // Save token to Chrome Storage
+      await chrome.storage.local.set({ "access_token": event.data.token });
+      
+      authWindow.close(); 
+      alert("Login Successful! 🚀");
+      
+      // Load accounts immediately after login
+      loadAccounts();
+    }
+  });
 });
 
-// 2. Data Loaders (Accounts/Containers/Workspaces)
+// ==========================================
+// 📂 DATA LOADERS (Accounts -> Containers -> Workspaces)
+// ==========================================
 async function loadAccounts() {
   const select = document.getElementById("accounts");
   const output = document.getElementById("output");
   select.innerHTML = "<option>Loading...</option>";
   
   try {
+    // Calls the secure fetchJSON
     const data = await fetchJSON(`${API}/gtm/accounts`);
     let list = data.account || (Array.isArray(data) ? data : []);
     
-    if (data.error) {
-       select.innerHTML = "<option>⚠️ Login Required</option>";
-       output.textContent = "Please connect to Google.";
-       return;
-    }
-    
+    // Reset Dropdown
     select.innerHTML = "<option value=''>-- Select Account --</option>";
     list.forEach(acc => select.add(new Option(acc.name, acc.accountId)));
     output.textContent = "Ready to audit.";
+    
   } catch (e) {
-    select.innerHTML = "<option>❌ Connection Failed</option>";
+    console.error(e);
+    select.innerHTML = "<option>⚠️ Login Required</option>";
+    output.textContent = "Please connect to Google.";
   }
 }
 
 document.getElementById("accounts").addEventListener('change', async (e) => {
   const select = document.getElementById("containers");
   select.innerHTML = "<option>Loading...</option>";
-  const data = await fetchJSON(`${API}/gtm/containers/${e.target.value}`);
-  const list = data.container || (Array.isArray(data) ? data : []);
-  select.innerHTML = "";
-  list.forEach(c => select.add(new Option(c.name, c.containerId)));
-  if(list.length) select.dispatchEvent(new Event('change'));
+  
+  try {
+    const data = await fetchJSON(`${API}/gtm/containers/${e.target.value}`);
+    const list = data.container || (Array.isArray(data) ? data : []);
+    
+    select.innerHTML = "";
+    list.forEach(c => select.add(new Option(c.name, c.containerId)));
+    if(list.length) select.dispatchEvent(new Event('change'));
+  } catch (err) {
+    console.error("Error loading containers", err);
+  }
 });
 
 document.getElementById("containers").addEventListener('change', async (e) => {
   const accId = document.getElementById("accounts").value;
   const select = document.getElementById("workspaces");
   select.innerHTML = "<option>Loading...</option>";
-  const data = await fetchJSON(`${API}/gtm/workspaces/${accId}/${e.target.value}`);
-  const list = data.workspace || (Array.isArray(data) ? data : []);
-  select.innerHTML = "";
-  list.forEach(w => select.add(new Option(w.name, w.workspaceId)));
+  
+  try {
+    const data = await fetchJSON(`${API}/gtm/workspaces/${accId}/${e.target.value}`);
+    const list = data.workspace || (Array.isArray(data) ? data : []);
+    
+    select.innerHTML = "";
+    list.forEach(w => select.add(new Option(w.name, w.workspaceId)));
+  } catch (err) {
+    console.error("Error loading workspaces", err);
+  }
 });
 
 // ==========================================
@@ -257,6 +319,7 @@ document.getElementById("audit").addEventListener('click', async () => {
   output.innerHTML = "<div style='text-align:center; padding:20px;'>🕵️ Analyzing 7 Audit Pillars...</div>";
 
   try {
+    // Calls secure fetchJSON (Token is attached automatically)
     const data = await fetchJSON(`${API}/audit/${acc.value}/${cont.value}/${work.value}`);
     
     const workspaceMeta = {
@@ -287,4 +350,5 @@ document.getElementById("audit").addEventListener('click', async () => {
   }
 });
 
+// Try to load accounts on startup (will fail if not logged in, that's expected)
 loadAccounts();
